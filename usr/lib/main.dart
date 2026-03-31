@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'dart:async';
 
 void main() {
@@ -45,6 +46,83 @@ class _DashboardScreenState extends State<DashboardScreen> {
   bool _isSequenceRunning = false;
   final List<String> _logs = [];
   final ScrollController _scrollController = ScrollController();
+
+  final String _pythonRobotCode = '''
+import time
+
+class FlowerHarvesterRobot:
+    def __init__(self):
+        self.is_moving = False
+        self.flower_detected = False
+
+    def move_manually(self):
+        """Simulates the 1-tyre robotic base moving manually."""
+        print("Robot (1-tyre base) is moving manually between rows...")
+        self.is_moving = True
+
+    def stop_robot(self):
+        """Stops the robot between two rows of plants."""
+        print("Robot stopped between rows.")
+        self.is_moving = False
+
+    def detect_flower_with_camera(self):
+        """Camera detects the flower."""
+        print("Camera: Scanning for flowers...")
+        time.sleep(2)
+        print("Camera: Flower detected! Coordinates locked.")
+        self.flower_detected = True
+
+    def harvest_sequence(self):
+        """Executes the 2-arm harvesting sequence."""
+        if not self.flower_detected:
+            print("No flower to harvest.")
+            return
+
+        # 1. Right arm holds the flower gently
+        print("Right Arm: Reaching for flower stem...")
+        time.sleep(1)
+        print("Right Arm: Perfect hold achieved gently.")
+
+        # 2. Left arm cuts the flower
+        print("Left Arm: Reaching to cut position...")
+        time.sleep(1)
+        print("Left Arm: Cutting the flower stem...")
+        time.sleep(1)
+        print("Left Arm: Retracting to idle position.")
+
+        # 3. Right arm collects and puts into the right-side box
+        print("Right Arm: Carrying flower to right-side collection box...")
+        time.sleep(1)
+        print("Right Arm: Dropping flower into the box.")
+        time.sleep(1)
+        print("Right Arm: Retracting to idle position.")
+        
+        self.flower_detected = False
+        print("Harvest sequence complete. Ready to move.")
+
+# --- Main Execution Loop ---
+if __name__ == "__main__":
+    robot = FlowerHarvesterRobot()
+    
+    try:
+        while True:
+            # 1. Manual moving
+            robot.move_manually()
+            time.sleep(3) # Simulating travel time
+            
+            # 2. Stop between rows
+            robot.stop_robot()
+            
+            # 3. Detect and Harvest
+            robot.detect_flower_with_camera()
+            robot.harvest_sequence()
+            
+            print("-" * 40)
+            time.sleep(2) # Wait before next move
+            
+    except KeyboardInterrupt:
+        print("Emergency Stop triggered. Shutting down.")
+''';
 
   void _addLog(String message) {
     setState(() {
@@ -165,164 +243,241 @@ class _DashboardScreenState extends State<DashboardScreen> {
     _addLog('System reset. Ready for operations.');
   }
 
+  void _copyCodeToClipboard() {
+    Clipboard.setData(ClipboardData(text: _pythonRobotCode));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Hardware code copied to clipboard!')),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Flower Harvester Control Center'),
-        backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _resetSystem,
-            tooltip: 'Reset System',
+    return DefaultTabController(
+      length: 2,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Flower Harvester Control Center'),
+          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              onPressed: _resetSystem,
+              tooltip: 'Reset System',
+            ),
+          ],
+          bottom: const TabBar(
+            tabs: [
+              Tab(icon: Icon(Icons.dashboard), text: 'Control Dashboard'),
+              Tab(icon: Icon(Icons.code), text: 'Hardware Code Generator'),
+            ],
           ),
-        ],
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        ),
+        body: TabBarView(
           children: [
-            // Top Status Row
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatusCard(
-                    'Robot Base',
-                    _robotState,
-                    Icons.directions_car,
-                    _robotState.contains('Moving') ? Colors.blue : (_robotState.contains('Stopped') ? Colors.orange : Colors.grey),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatusCard(
-                    'Camera System',
-                    _cameraState,
-                    Icons.camera_alt,
-                    _cameraState.contains('Detected') ? Colors.green : Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            
-            // Arms Status Row
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatusCard(
-                    'Left Arm (Cutter)',
-                    _leftArmState,
-                    Icons.content_cut,
-                    _leftArmState != 'Idle' ? Colors.redAccent : Colors.grey,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatusCard(
-                    'Right Arm (Holder)',
-                    _rightArmState,
-                    Icons.pan_tool,
-                    _rightArmState != 'Idle' ? Colors.tealAccent : Colors.grey,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
+            _buildDashboardTab(),
+            _buildCodeTab(),
+          ],
+        ),
+      ),
+    );
+  }
 
-            // Controls
-            Card(
+  Widget _buildDashboardTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Top Status Row
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatusCard(
+                  'Robot Base',
+                  _robotState,
+                  Icons.directions_car,
+                  _robotState.contains('Moving') ? Colors.blue : (_robotState.contains('Stopped') ? Colors.orange : Colors.grey),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatusCard(
+                  'Camera System',
+                  _cameraState,
+                  Icons.camera_alt,
+                  _cameraState.contains('Detected') ? Colors.green : Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          
+          // Arms Status Row
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatusCard(
+                  'Left Arm (Cutter)',
+                  _leftArmState,
+                  Icons.content_cut,
+                  _leftArmState != 'Idle' ? Colors.redAccent : Colors.grey,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatusCard(
+                  'Right Arm (Holder)',
+                  _rightArmState,
+                  Icons.pan_tool,
+                  _rightArmState != 'Idle' ? Colors.tealAccent : Colors.grey,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+
+          // Controls
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Manual Controls', style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: _isSequenceRunning || _robotState == 'EMERGENCY STOP' ? null : _startManualMove,
+                        icon: const Icon(Icons.play_arrow),
+                        label: const Text('Start Manual Move'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue.withOpacity(0.2),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _isSequenceRunning || _robotState != 'Moving (Manual)' ? null : _stopAndHarvest,
+                        icon: const Icon(Icons.precision_manufacturing),
+                        label: const Text('Stop & Harvest Flower'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.withOpacity(0.2),
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        ),
+                      ),
+                      ElevatedButton.icon(
+                        onPressed: _emergencyStop,
+                        icon: const Icon(Icons.warning),
+                        label: const Text('E-STOP'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // System Logs
+          Expanded(
+            child: Card(
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Manual Controls', style: Theme.of(context).textTheme.titleLarge),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                      children: [
-                        ElevatedButton.icon(
-                          onPressed: _isSequenceRunning || _robotState == 'EMERGENCY STOP' ? null : _startManualMove,
-                          icon: const Icon(Icons.play_arrow),
-                          label: const Text('Start Manual Move'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.blue.withOpacity(0.2),
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          ),
+                    Text('System Logs', style: Theme.of(context).textTheme.titleLarge),
+                    const Divider(),
+                    Expanded(
+                      child: Container(
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: Colors.black12,
+                          borderRadius: BorderRadius.circular(8),
                         ),
-                        ElevatedButton.icon(
-                          onPressed: _isSequenceRunning || _robotState != 'Moving (Manual)' ? null : _stopAndHarvest,
-                          icon: const Icon(Icons.precision_manufacturing),
-                          label: const Text('Stop & Harvest Flower'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.green.withOpacity(0.2),
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          ),
+                        padding: const EdgeInsets.all(8),
+                        child: ListView.builder(
+                          controller: _scrollController,
+                          itemCount: _logs.length,
+                          itemBuilder: (context, index) {
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(vertical: 4.0),
+                              child: Text(
+                                _logs[index],
+                                style: const TextStyle(
+                                  fontFamily: 'monospace',
+                                  fontSize: 14,
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                        ElevatedButton.icon(
-                          onPressed: _emergencyStop,
-                          icon: const Icon(Icons.warning),
-                          label: const Text('E-STOP'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 24),
+          ),
+        ],
+      ),
+    );
+  }
 
-            // System Logs
-            Expanded(
-              child: Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('System Logs', style: Theme.of(context).textTheme.titleLarge),
-                      const Divider(),
-                      Expanded(
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.black12,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          padding: const EdgeInsets.all(8),
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            itemCount: _logs.length,
-                            itemBuilder: (context, index) {
-                              return Padding(
-                                padding: const EdgeInsets.symmetric(vertical: 4.0),
-                                child: Text(
-                                  _logs[index],
-                                  style: const TextStyle(
-                                    fontFamily: 'monospace',
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
-                        ),
-                      ),
-                    ],
+  Widget _buildCodeTab() {
+    return Padding(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Generated Python Hardware Script',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              ElevatedButton.icon(
+                onPressed: _copyCodeToClipboard,
+                icon: const Icon(Icons.copy),
+                label: const Text('Copy Code'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'This script can be deployed to a Raspberry Pi or similar microcontroller to execute the physical robot logic.',
+            style: TextStyle(color: Colors.grey),
+          ),
+          const SizedBox(height: 16),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF1E1E1E), // Dark code editor background
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.grey.withOpacity(0.3)),
+              ),
+              child: SingleChildScrollView(
+                child: SelectableText(
+                  _pythonRobotCode,
+                  style: const TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 14,
+                    color: Color(0xFFD4D4D4), // VS Code default text color
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
